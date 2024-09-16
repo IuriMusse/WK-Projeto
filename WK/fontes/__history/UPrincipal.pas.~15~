@@ -1,0 +1,473 @@
+unit UPrincipal;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.ExtCtrls, Vcl.Buttons, Vcl.StdCtrls,
+  System.ImageList, Vcl.ImgList, Data.DB, Vcl.Grids, Vcl.DBGrids,
+  Vcl.Samples.Spin, Datasnap.DBClient, FireDAC.Stan.Intf, FireDAC.Stan.Option,
+  FireDAC.Stan.Param, FireDAC.Stan.Error, FireDAC.DatS, FireDAC.Phys.Intf,
+  FireDAC.DApt.Intf, FireDAC.Stan.Async, FireDAC.DApt, FireDAC.Comp.DataSet,
+  FireDAC.Comp.Client,  Datasnap.Provider, Vcl.Imaging.pngimage, UPedido, UItemPedido, System.UITypes;
+
+type
+  TfrmPrincipal = class(TForm)
+    shpTopo: TShape;
+    btnIniciarVenda: TSpeedButton;
+    btnFinalizarVenda: TSpeedButton;
+    btnCancelarVenda: TSpeedButton;
+    lblCodCliente: TLabel;
+    lblNomeCliente: TLabel;
+    shpCupom: TShape;
+    shpFundo: TShape;
+    lblCodProduto: TLabel;
+    shpDescricaoProduto: TShape;
+    lblQuantidade: TLabel;
+    lblPrecoTotal: TLabel;
+    lblPrecoUnitario: TLabel;
+    btnAdicionarProduto: TSpeedButton;
+    lblCupom: TLabel;
+    lblProduto: TLabel;
+    shpTotalVendas: TShape;
+    lblTotalPedido: TLabel;
+    edtCodCliente: TEdit;
+    edtNomeCliente: TEdit;
+    edtCodProduto: TEdit;
+    spnQuantidade: TSpinEdit;
+    edtPrecoTotalItem: TEdit;
+    cdsitensVendas: TClientDataSet;
+    cdsitensVendascod: TIntegerField;
+    cdsitensVendasdescricao: TStringField;
+    cdsitensVendasvl_item: TCurrencyField;
+    cdsitensVendasTotal_Item: TCurrencyField;
+    cdsitensVendasvl_unitario: TCurrencyField;
+    cdsitensVendasTotal: TAggregateField;
+    dsItensVendas: TDataSource;
+    grdVendas: TDBGrid;
+    qryProdutos: TFDQuery;
+    qryProdutosCODIGO: TFDAutoIncField;
+    qryProdutosDESCRICAO: TStringField;
+    qryProdutosPRECO_VENDA: TBCDField;
+    edtPrecoUnitario: TEdit;
+    qryClientes: TFDQuery;
+    qryClientesCODIGO: TFDAutoIncField;
+    qryClientesNOME: TStringField;
+    qryClientesCIDADE: TStringField;
+    qryClientesUF: TStringField;
+    qryConcluirPedido: TFDQuery;
+    qryItemVenda: TFDQuery;
+    cdsitensVendasqtd: TIntegerField;
+    qryPedido: TFDQuery;
+    lblNumPedido: TLabel;
+    lblPedido: TLabel;
+    qryPedidoCOUNT: TLargeintField;
+    lblTotalVendas: TLabel;
+    imgProduto: TImage;
+    lblInstrucao: TLabel;
+    lblInicio: TLabel;
+    lblStatusCaixa: TLabel;
+
+    procedure edtCodProdutoChange(Sender: TObject);
+    procedure btnAdicionarProdutoClick(Sender: TObject);
+    procedure FormCreate(Sender: TObject);
+    procedure spnQuantidadeChange(Sender: TObject);
+    procedure edtCodClienteChange(Sender: TObject);
+    procedure btnFinalizarVendaClick(Sender: TObject);
+    procedure btnIniciarVendaClick(Sender: TObject);
+    procedure btnCancelarVendaClick(Sender: TObject);
+    procedure grdVendasKeyUp(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+    procedure grdVendasColEnter(Sender: TObject);
+    procedure grdVendasKeyDown(Sender: TObject; var Key: Word;
+      Shift: TShiftState);
+
+  private
+    { Private declarations }
+    procedure DesativaCamposVenda;
+    procedure AtivaCamposVenda;
+    procedure LimpaCamposVenda;
+    procedure PreencheCamposDBGrid;
+    procedure AtualizaTotalItem;
+    procedure LimpaDadosItensVenda;
+    procedure GeraCodigoPedido;
+    function ValidaCampos: Boolean;
+    function IncluiItemVenda(ItemPedido : TItemPedido): Boolean;
+
+  public
+    { Public declarations }
+  end;
+
+var
+  frmPrincipal: TfrmPrincipal;
+  Pedido : TPedido;
+
+implementation
+uses
+  UDm;
+
+{$R *.dfm}
+
+procedure TfrmPrincipal.btnFinalizarVendaClick(Sender: TObject);
+var
+  itemPedido: TItemPedido;
+begin
+  if grdVendas.DataSource.DataSet.RecordCount <> 0 then
+  begin
+    try
+      qryConcluirPedido.Close;
+      qryConcluirPedido.ParamByName('1').Value := Pedido.NUM_PEDIDO;
+      qryConcluirPedido.ParamByName('2').Value := edtCodCliente.Text;
+      qryConcluirPedido.ParamByName('3').Value := cdsitensVendasTotal.Value;
+      qryConcluirPedido.ExecSQL;
+
+      cdsitensVendas.First;
+      while not cdsitensVendas.Eof do
+      begin
+        itemPedido := TItemPedido.Create;
+        try
+          itemPedido.NUM_PEDIDO := Pedido.NUM_PEDIDO;
+          itemPedido.CODIGO_PRODUTO := cdsitensVendascod.Value;
+          itemPedido.QUANTIDADE := cdsitensVendasqtd.Value;
+          itemPedido.VLR_UNITARIO := cdsitensVendasvl_item.Value;
+          itemPedido.VLR_TOTAL := cdsitensVendasTotal_Item.Value;
+          IncluiItemVenda(itemPedido);
+        finally
+          itemPedido.Free;
+        end;
+        cdsitensVendas.Next;
+      end;
+
+      LimpaDadosItensVenda;
+      DesativaCamposVenda;
+      lblStatusCaixa.Caption := 'CAIXA LIVRE';
+      lblStatusCaixa.Font.Color := clGreen;
+      lblPedido.Caption := '00000';
+      edtCodCliente.Clear;
+      edtNomeCliente.Clear;
+      LimpaCamposVenda;
+      Application.MessageBox('Venda concluída com sucesso!', 'Sucesso', MB_OK + MB_ICONINFORMATION);
+    except
+      on E: Exception do
+      begin
+        Application.MessageBox(PChar('Erro ao concluir a venda: ' + E.Message), 'Erro', MB_OK + MB_ICONERROR);
+      end;
+    end;
+  end
+  else
+  begin
+    Application.MessageBox('Nenhuma venda para processar!', 'Aviso', MB_OK + MB_ICONWARNING);
+  end;
+
+  Pedido.Free;
+  LimpaCamposVenda;
+  lblTotalPedido.Caption := '0,00';
+end;
+
+
+function TfrmPrincipal.IncluiItemVenda(ItemPedido : TItemPedido): Boolean;
+begin
+  try
+    with qryItemVenda do
+    begin
+      Close;
+      ParamByName('1').Value := ItemPedido.NUM_PEDIDO;
+      ParamByName('2').Value := ItemPedido.CODIGO_PRODUTO;
+      ParamByName('3').Value := ItemPedido.QUANTIDADE;
+      ParamByName('4').Value := ItemPedido.VLR_UNITARIO;
+      ParamByName('5').Value := ItemPedido.VLR_TOTAL;
+      ExecSQL;
+    end;
+    Result := true;
+  except
+    on e: exception do
+    begin
+      Result := false;
+    end;
+  end;
+end;
+
+procedure TfrmPrincipal.btnIniciarVendaClick(Sender: TObject);
+begin
+  lblStatusCaixa.Caption := 'OCUPADO';
+  lblStatusCaixa.font.Color := $004949FC;
+  dsItensVendas.DataSet.Open;
+  btnIniciarVenda.Enabled := False;
+  AtivaCamposVenda;
+  FreeAndNil(Pedido);
+  GeraCodigoPedido;
+end;
+
+procedure TfrmPrincipal.btnAdicionarProdutoClick(Sender: TObject);
+begin
+  try
+    if ValidaCampos then
+    begin
+      cdsitensVendas.Append;
+      cdsitensVendascod.Value := qryProdutosCODIGO.Value;
+      cdsitensVendasdescricao.Value := qryProdutosDESCRICAO.Value;
+      cdsitensVendasqtd.Value := spnQuantidade.Value;
+      cdsitensVendasvl_item.Value := qryProdutosPRECO_VENDA.Value;
+      cdsitensVendasTotal_Item.Value := qryProdutosPRECO_VENDA.Value * spnQuantidade.Value;
+      cdsitensVendas.Post;
+
+      lblTotalPedido.Caption := FormatFloat('##,###,##0.00', cdsitensVendasTotal.Value);
+      edtCodProduto.SetFocus;
+    end
+    else
+    begin
+      Application.MessageBox('Preencha os dados do produto!', 'Campos inválidos', MB_OK + MB_ICONERROR);
+    end;
+  finally
+    LimpaCamposVenda;
+    imgProduto.Visible := False;
+  end;
+end;
+
+procedure TfrmPrincipal.btnCancelarVendaClick(Sender: TObject);
+begin
+  if MessageDlg('Deseja cancelar a venda?', mtConfirmation, [mbYes, mbNo], 0) = mrYes then
+  begin
+    Pedido.Free;
+    LimpaDadosItensVenda;
+    btnFinalizarVenda.Enabled := False;
+    lblStatusCaixa.Caption := 'CAIXA LIVRE';
+    lblStatusCaixa.Font.Color := clGreen;
+    DesativaCamposVenda;
+    lblPedido.Caption := '00000';
+    edtCodCliente.Clear;
+    edtNomeCliente.Clear;
+    LimpaCamposVenda;
+  end;
+end;
+
+procedure TfrmPrincipal.edtCodClienteChange(Sender: TObject);
+begin
+  if edtCodCliente.Text <> '' then
+  begin
+    try
+      with qryClientes do
+      begin
+        Close;
+        ParamByName('cod').Value := edtCodCliente.Text;
+        Open;
+        FetchAll;
+      end;
+      if qryClientes.RecordCount > 0 then
+      begin
+        edtNomeCliente.Text := string(qryClientesNOME.Value);
+      end
+      else
+      begin
+        edtNomeCliente.Text := 'CLIENTE NÃO CADASTRADO...';
+      end;
+    except
+      on E: Exception do
+      begin
+        Application.MessageBox(PChar('Erro ao buscar cliente: ' + E.Message), 'Erro', MB_OK + MB_ICONERROR);
+        edtNomeCliente.Text := '';
+      end;
+    end;
+  end
+  else
+  begin
+    LimpaCamposVenda;
+  end;
+end;
+
+procedure TfrmPrincipal.edtCodProdutoChange(Sender: TObject);
+begin
+  if edtCodProduto.Text <> '' then
+  begin
+    with qryProdutos do
+    begin
+      Close;
+      ParamByName('cod').Value := edtCodProduto.Text;
+      Open;
+    end;
+
+    if not qryProdutos.IsEmpty then
+    begin
+      spnQuantidade.Value := 0;
+      lblProduto.Caption := qryProdutosDESCRICAO.AsString;
+      imgProduto.Visible := True;
+      edtPrecoUnitario.Text := FormatFloat('##,###,##0.00', qryProdutosPRECO_VENDA.AsFloat);
+      AtualizaTotalItem;
+    end
+    else
+    begin
+      LimpaCamposVenda;
+      lblProduto.Caption := 'PRODUTO NÃO ENCONTRADO...';
+    end;
+  end
+  else
+  begin
+    LimpaCamposVenda;
+  end;
+end;
+
+procedure TfrmPrincipal.FormCreate(Sender: TObject);
+begin
+  cdsitensVendas.CreateDataSet;
+  DesativaCamposVenda;
+  lblInicio.Caption := Format('Hoje é %s e são %s', [DateToStr(Date), TimeToStr(Time)]);
+end;
+
+procedure TfrmPrincipal.GeraCodigoPedido;
+begin
+  try
+    with qryPedido do
+    begin
+      Close;
+      Open;
+
+      if IsEmpty then
+        Pedido := TPedido.Create
+      else
+      begin
+        Pedido := TPedido.Create;
+        Pedido.NUM_PEDIDO := qryPedidoCOUNT.Value + 1;
+      end;
+
+      lblPedido.Caption := Format('%5.5d', [Pedido.NUM_PEDIDO]);
+    end;
+  except
+    on E: Exception do
+    begin
+      Application.MessageBox(PChar('Erro ao gerar código do pedido: ' + E.Message), 'Erro', MB_OK + MB_ICONERROR);
+      if Assigned(Pedido) then
+        FreeAndNil(Pedido);
+    end;
+  end;
+end;
+
+procedure TfrmPrincipal.grdVendasColEnter(Sender: TObject);
+begin
+  PreencheCamposDBGrid;
+end;
+
+procedure TfrmPrincipal.grdVendasKeyDown(Sender: TObject; var Key: Word; Shift: TShiftState);
+begin
+  if (Key = VK_DELETE) and (cdsitensVendas.RecordCount > 0) then
+  begin
+    if cdsitensVendas.State in [dsBrowse] then
+    begin
+      if MessageDlg('Deseja realmente excluir o item selecionado?', mtConfirmation, [mbYes, mbNo], 0) = mrYes then
+      begin
+        try
+          cdsitensVendas.Delete;
+        except
+          on E: Exception do
+          begin
+            Application.MessageBox(PChar('Erro ao excluir item: ' + E.Message), 'Erro', MB_OK + MB_ICONERROR);
+            Exit;
+          end;
+        end;
+
+        lblTotalPedido.Caption := FormatFloat('##,###,##0.00', cdsitensVendasTotal.Value);
+
+        LimpaCamposVenda;
+      end;
+    end;
+  end;
+end;
+
+procedure TfrmPrincipal.grdVendasKeyUp(Sender: TObject; var Key: Word;
+  Shift: TShiftState);
+begin
+  PreencheCamposDBGrid;
+end;
+
+procedure TfrmPrincipal.AtivaCamposVenda;
+begin
+  edtCodCliente.Enabled := True;
+  edtNomeCliente.Enabled := True;
+  edtCodProduto.Enabled := True;
+  edtPrecoUnitario.Enabled := True;
+  edtPrecoTotalItem.Enabled := True;
+  spnQuantidade.Enabled := True;
+  btnAdicionarProduto.Enabled := True;
+  btnCancelarVenda.Enabled := True;
+  btnFinalizarVenda.Enabled := True;
+  btnIniciarVenda.Enabled := False;
+end;
+
+procedure TfrmPrincipal.DesativaCamposVenda;
+begin
+  LimpaCamposVenda;
+  edtCodProduto.Enabled := False;
+  edtCodCliente.Enabled := False;
+  edtNomeCliente.Enabled := False;
+  edtPrecoUnitario.Enabled := False;
+  edtPrecoTotalItem.Enabled := False;
+  spnQuantidade.Enabled := False;
+  btnAdicionarProduto.Enabled := False;
+  btnFinalizarVenda.Enabled := False;
+  btnCancelarVenda.Enabled := False;
+  btnIniciarVenda.Enabled := True;
+end;
+
+procedure TfrmPrincipal.spnQuantidadeChange(Sender: TObject);
+begin
+  AtualizaTotalItem;
+end;
+
+function TfrmPrincipal.ValidaCampos: Boolean;
+begin
+  Result := (edtCodProduto.Text <> '') and
+            (spnQuantidade.Value > 0) and
+            (edtPrecoUnitario.Text <> '');
+
+  if not Result then
+  begin
+    Application.MessageBox('Por favor, preencha todos os campos obrigatórios.', 'Campos inválidos', MB_OK + MB_ICONWARNING);
+  end;
+end;
+
+procedure TfrmPrincipal.LimpaCamposVenda;
+begin
+  spnQuantidade.Value := 0;
+  edtCodProduto.Text := '';
+  edtPrecoUnitario.Clear;
+  edtPrecoTotalItem.Clear;
+end;
+procedure TfrmPrincipal.LimpaDadosItensVenda;
+begin
+    with cdsitensVendas do
+    begin
+      Open;
+      EmptyDataSet;
+      Close;
+    end;
+    cdsitensVendas.Open;
+end;
+
+procedure TfrmPrincipal.PreencheCamposDBGrid;
+begin
+   edtCodProduto.Text := cdsitensVendascod.AsString;
+   spnQuantidade.Value := cdsitensVendasqtd.Value;
+   AtualizaTotalItem;
+end;
+
+procedure TfrmPrincipal.AtualizaTotalItem;
+var
+  PrecoUnitario: Double;
+begin
+  if (spnQuantidade.Value > 0) and
+     (TryStrToFloat(edtPrecoUnitario.Text, PrecoUnitario)) and
+     (PrecoUnitario > 0) then
+  begin
+    try
+      edtPrecoTotalItem.Text := FormatFloat('##,###,##0.00', PrecoUnitario * spnQuantidade.Value);
+    except
+      on E: Exception do
+        Application.MessageBox(PChar('Erro ao calcular o total do item: ' + E.Message), 'Erro', MB_OK + MB_ICONERROR);
+    end;
+  end
+  else
+  begin
+    edtPrecoTotalItem.Text := '0.00';
+  end;
+end;
+
+end.
